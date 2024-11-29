@@ -1,0 +1,450 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>World Map with Tooltip in d3.js</title>
+  <script src="https://d3js.org/d3.v7.min.js"></script>  <!-- d3.js version 7 -->
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      font-family: Arial, sans-serif;
+      background-color: #1b4d3e; /* Dark green background */
+      display: flex;
+      height: 100vh;
+      flex-direction: row;
+    }
+
+    /* Flex container to hold the two halves */
+    .container {
+      display: flex;
+      width: 100%;
+    }
+
+    /* Each half (left and right) */
+    .left, .right {
+      width: 50%;
+      height: 100vh; /* Full height of the window */
+    }
+
+    svg {
+      width: 100%;
+      height: 100%;
+    }
+
+    /* Styles for the concentric circles */
+    .circle-inner {
+      fill: red;
+      opacity: 0.8;
+    }
+
+    .circle-outer {
+      fill: #FFA500; /* Orange */
+      opacity: 0.3;   /* Thinner opacity */
+    }
+
+    .label {
+      font-size: 18px;
+      fill: red;
+      pointer-events: none;
+    }
+
+    /* Tooltip styles */
+    .tooltip {
+      position: absolute;
+      text-align: center;
+      padding: 8px;
+      background-color: rgba(0, 0, 0, 0.7);
+      color: white;
+      border-radius: 4px;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.2s ease;
+      font-size: 12px;
+    }
+
+    /* Text content style */
+    .right {
+      padding: 20px;
+      overflow-y: auto;
+    }
+
+    .right h1 {
+      font-size: 24px;
+      margin-bottom: 20px;
+    }
+
+    .right p {
+      font-size: 16px;
+      line-height: 1.6;
+    }
+
+    .logo-cdc {
+        position: absolute;
+        height:100%;
+        z-index:10x;
+    }
+
+    /* Style for the logo */
+    .logo {
+        font-size: 36px;
+        font-weight: bold;
+        margin-bottom: 20px;
+        color: #a7d08b; /* Light green logo text */
+        text-shadow: 2px 2px 5px rgba(0, 0, 0, 0.5); /* Text shadow for glowing effect */
+    }
+
+    .news-ticker {
+      font-size: 20px;
+      letter-spacing: 0.5px;
+      padding-top: 10px;
+      color: #e4f1d6; /* Soft light green text color for ticker */
+      border-top: 3px solid #a7d08b; /* Light green border on top of ticker */
+      white-space: normal;  /* Allow wrapping of text */
+      word-wrap: break-word; /* Ensure words break if necessary */
+      overflow-wrap: break-word; /* Alternative property for wrapping */
+      display: block;
+      width: 100%;
+      height: 150px;
+    }
+
+    .news-ticker-no-border {
+      font-size: 20px;
+      letter-spacing: 0.5px;
+      padding-top: 10px;
+      color: #e4f1d6; /* Soft light green text color for ticker */
+      white-space: normal;  /* Allow wrapping of text */
+      word-wrap: break-word; /* Ensure words break if necessary */
+      overflow-wrap: break-word; /* Alternative property for wrapping */
+      display: block;
+      width: 100%;
+      height: 150px;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    <!-- Left container for SVG -->
+    <div class="left">
+      <svg></svg>
+      <div id="tooltip"></div>
+    </div>
+
+    <div class="right">
+      <!-- Logo Section -->
+      <div class="logo" id="logo">
+        台灣CDC E型肝炎國際疫情報告
+      </div>
+      <div class="news-ticker" id="typewriter"></div>
+      <div class="news-ticker-no-border" id="typewriter2"></div>
+      <div class="news-ticker-no-border" id="typewriter3"></div>
+      <div class="news-ticker-no-border" id="typewriter4"></div>
+    </div>
+  </div>
+
+  <script> 
+    const locations = [
+      {'year': 2024, 'name': 'South Sudan', 'id': 1, 'lat': 4.8594, 'lon': 29.6691, 'textContent': '[資料來源：Radio Tamazuj 7/31] 南蘇丹中南部團結州(Unity State)疫情上升，自2月疫情發生以來，截至7/29該州累計至少1,300例感染個案，推估疫情發生主因當地缺乏衛生廁所及清潔用水所致，當局規劃推動E型肝炎疫苗接種措施。'},
+      {'year': 2024, 'name': 'Finland', 'id': 2, 'lat': 61.9241, 'lon': 25.7482, 'textContent': '[資料來源：芬蘭國家衛生與福利研究所 3/12 ，2024/3/12] 芬蘭今年截至2月累計報告92例，較去年全年33例為高，病例分布於全國，其中42例住院，1例死亡，惟死因可能與肝炎感染無相關。當局正調查病患間關聯性及可能感染源，目前初步調查結果顯示可能為香腸製品。'},
+      {'year': 2024, 'name': 'Chad', 'id': 3, 'lat': 15.4542, 'lon': 18.7322, 'textContent': '[資料來源：bnn news 2/29 ，2024/2/29] 查德東部蘇丹難民營病例數上升，累計報告954例，其中4例死亡，由於當地衛生條件惡劣及供水設施缺乏，加劇當地傳播風險。'},
+      {'year': 2024, 'name': 'Europe', 'id': 4, 'lat': 54.5260, 'lon': 15.2551, 'textContent': '[資料來源：ECDC ，2024/2/9] 歐盟於今年1月，共11國累計報告520例，其中捷克(63例)、芬蘭(38例)及比利時(36例)高於去年同期，病患多為男性。經定序結果顯示比利時個案之型別多為基因型3c型，另芬蘭個案多表示曾食用香腸等肉製品，當局表示歐洲地區感染來源多為未煮熟之豬肉及其製品，評估歐盟各國將持續報告案例。'},
+      {'year': 2023, 'name': 'Czech Republic', 'id': 1, 'lat': 49.8175, 'lon': 15.4730, 'textContent': '[資料來源：捷克國家衛生研究所、Outbreak News Today ，2023/6/29] 捷克東北部摩拉維亞-西利西亞州(Moravian-Silesian)近期病例數明顯上升，今年迄今已累計41例，為去年全年病例數近2倍。當局表示全國今年病例較往年增加，截至今年5月累計報告221例，去年全年為319例，嚴重病例數亦明顯增加。'},
+      {'year': 2023, 'name': 'South Sudan', 'id': 2, 'lat': 4.8594, 'lon': 29.6691, 'textContent': '[資料來源：abc news ，2023/4/19] 南蘇丹西北部西加扎爾河州4/18宣布爆發疫情，新增報告96例病例，其中5例死亡(CFR：5.5%)，男性病例占逾7成，當局呼籲市民加強個人及環境衛生。 South Sudan is a landlocked country in East-Central Africa, known for its recent independence in 2011.'},
+      {'year': 2022, 'name': 'South Sudan', 'id': 1, 'lat': 4.8594, 'lon': 29.6691, 'textContent': '[資料來源：AFRO ，2022/3/20] 南蘇丹團結州(Unity)班提烏平民保護營(Bentiu camp)疫情持續，該營區2019-20年病例數分別為130例及277例，去年5月起病例陡升，全年累計逾1,100例；自2019年迄今已累計達2,167例，其中16例死亡(CFR：0.7%)。'},
+      {'year': 2022, 'name': 'Chinese mainland', 'id': 2, 'lat': 35.8617, 'lon': 104.1954, 'textContent': '[資料來源：中國大陸疾病預防控制中心 ，2022/2/21] 中國大陸2022年1月共報告627,558例，其中死亡1,685人，呈上升趨勢或高於近年同期之重點疾病如下： 乙型肝炎：疫情上升，1月新增逾109,000例，較去年12月逾108,000例為高，且為近10年同期最高。 戊型肝炎：疫情上升，1月新增逾2,500例，較去年12月逾2,300例為高，且高於2020-2021年同期。 百日咳：疫情上升，1月新增逾2,300例，較去年12月逾2,200例為高，且為近10年同期最高。'},
+      {'year': 2021, 'name': 'Chad', 'id': 1, 'lat': 15.4542, 'lon': 18.7322, 'textContent': '[資料來源：AFRO、Outbreak News Today ，2021/12/1] 查德自今年8月底出現病例，截至11/20累計377例，其中2例死亡，病例中男性略多，主要受影響族群為10歲以下孩童，病例集中於坦格勒地區(Tangile)，該區於2017-18年亦曾出現疫情爆發。'},
+      {'year': 2021, 'name': 'South Sudan', 'id': 2, 'lat': 4.8594, 'lon': 29.6691, 'textContent': '[資料來源：AFRO ，2021/8/11] 南蘇丹班提烏平民保護營(Bentiu UN Protection of Civilians)自2018年初爆發疫情持續至今年7/25累計801例，其中5例死亡。由於衛生條件不佳，2021年初開始病例數急遽上升，其中第29週(7/19-7/25)新增32例。'},
+      {'year': 2021, 'name': 'Namibia', 'id': 3, 'lat': -22.5597, 'lon': 17.0832, 'textContent': '[資料來源：AFRO ，2021/8/4] 納米比亞今年5/24-7/18累計12例，病例分布以霍馬斯地區(Khomas)為多(佔76.9%)；該國自2017年9月爆發疫情，截至今年7/18累計確診8,081例，66例死亡，病例分布以霍馬斯區(Khomas)及埃龍戈區(Erongo)為多，病例年齡及性別分布以20-39歲族群、男性為多；當局已加強主動監測並對民眾進行風險溝通。'},
+      {'year': 2021, 'name': 'Burkina Faso', 'id': 4, 'lat': 12.2383, 'lon': -1.5616, 'textContent': '[資料來源：AFRO ，2021/4/21] 布吉納法索疫情持續，中北部巴薩洛戈地區(Barsalogho)自去年9/8至今年3/28累計近847例發熱性黃疸，其中17例死亡，病例中10例確診為E型肝炎；當局表示主要影響族群為無家可歸者、孕婦及產後婦女。'},
+      {'year': 2020, 'name': 'Burkina Faso', 'id': 1, 'lat': 12.2383, 'lon': -1.5616, 'textContent': '[資料來源：WHO ，2020/11/27] WHO更新布吉納法索疫情，中北部地區今年9/8-11/24累計442例發熱性黃疸，其中16例死亡(15例為孕婦或產後婦女)；目前尚有10人住院中。當局已啟動緊急衛生響應行動，加強監測發熱性黃疸病例及改善環境衛生。WHO表示該地區基本衛生條件不足且因攻擊事件頻繁致人流量大，評估該國內傳播風險為中，區域及國際傳播風險為低；建議應加強孕婦產前診斷及高危險群疫苗接種。另由於該疾病潛伏期長，WHO預估未來10週仍將持續出現病例。'},
+      {'year': 2020, 'name': 'Hongkong', 'id': 2, 'lat': 22.3193, 'lon': 114.1694, 'textContent': '[資料來源：香港衛生防護中心 ，2020/11/4] 香港於11/4公布1例確診，為59歲男子且患有慢性病個案，曾出現肝功能異常症狀，現病況穩定，經檢驗對大鼠E型肝炎呈陽性反應；該名患者居住於新界區東北部大埔，無齧齒動物或鼠隻接觸史，潛伏期內無旅遊史，感染源及途徑調查中。今年1/1起迄今累計6例，與2019年全年病例數相當；其中9/4迄今即公布4例確診。另病例多分布於九龍區及鄰近地區，且多無鼠隻接觸史。'},
+      {'year': 2020, 'name': 'South Sudan', 'id': 3, 'lat': 4.8594, 'lon': 29.6691, 'textContent': '[資料來源：AFRO ，2020/4/28] 南蘇丹於第16週(4/13-4/19)新增3例，該國自2019年初爆發疫情，截至4/19累計報告274例，其中2例死亡，多數病例集中於班提烏平民保護營(Bentiu UN Protection of Civilians)。'},
+      {'year': 2020, 'name': 'Namibia', 'id': 4, 'lat': -22.5597, 'lon': 17.0832, 'textContent': '[資料來源：ProMED、AFRO ，2020/2/4] 納米比亞2019/12/16-12/29報告82例，較前2週(12/2-12/15)63例為多。該國自2017年9月爆發疫情，截至去年12/29累計確診1,700餘例，59例死亡。病例主要來自哈瓦那(Havana)、戈雷安加布(Goreangab)、斯瓦科普蒙德(Swakopmund)等地區，以男性及20至39歲年齡層為多。'},
+      {'year': 2019, 'name': 'Hongkong', 'id': 1, 'lat': 22.3193, 'lon': 114.1694, 'textContent': '[資料來源：香港衛生防護中心 ，2019/8/9] 香港於8/9公布1例確診，為43歲男性且患有慢性病個案，病患於5月初曾出現肝功能異常，病況穩定無須住院。該名患者居住於葵青區，並表示不曾接觸鼠隻或其排泄物，其住處亦無發現鼠隻，潛伏期曾前往深圳，惟感染源及途徑尚未確定。'},
+      {'year': 2019, 'name': 'India', 'id': 2, 'lat': 20.5937, 'lon': 78.9629, 'textContent': '[資料來源：ProMED、The Indian Express ，2019/9/23] 據報導，印度巴廷達市(Bathinda) 於9/5-23通報165例黃疸病例及1例死亡。經調查該市Harraipur區累計A型肝炎120例；Rama Mandi區累計E型肝炎45例，該疫情疑與當地發生豪雨後，水源受到汙染有關。'},
+      {'year': 2019, 'name': 'Namibia', 'id': 3, 'lat': -22.5597, 'lon': 17.0832, 'textContent': '[資料來源：AFRO ，2019/4/21] 納米比亞近期疫情下降，自2017/12/14宣布疫情爆發至今年4/14累計報告約5,000例，其中871例確診，42例死亡(CFR：0.8%)，年齡分布以20-39歲為多；該國已有8區宣布為流行區，病例以霍馬斯區(Khomas)逾3,000例為多，其次為埃龍戈區(Erongo)逾1,000例。該疫情發生主因為無安全衛生之水源，WHO表示仍應加強改善衛生習慣及落實個案管理等因應作為，以控制疫情。'},
+      {'year': 2018, 'name': 'Central African Republic', 'id': 1, 'lat': 6.6111, 'lon': 20.9394, 'textContent': 'The Central African Republic is a landlocked country in Central Africa, with a history of political instability and rich natural resources.'},
+      {'year': 2018, 'name': 'Hongkong', 'id': 2, 'lat': 22.3193, 'lon': 114.1694, 'textContent': 'Hong Kong is a Special Administrative Region of China, known for its modern skyline, financial hub, and unique cultural blend.'},
+      {'year': 2018, 'name': 'Namibia', 'id': 3, 'lat': -22.5597, 'lon': 17.0832, 'textContent': 'Namibia is a country in Southern Africa, known for its deserts, wildlife, and one of the lowest population densities in the world.'},
+      {'year': 2018, 'name': 'Japan', 'id': 4, 'lat': 36.2048, 'lon': 138.2529, 'textContent': 'Japan is an island nation in East Asia, known for its advanced technology, rich culture, and natural beauty.'},
+      {'year': 2017, 'name': 'Namibia', 'id': 1, 'lat': -22.5597, 'lon': 17.0832, 'textContent': 'Namibia is a country in Southern Africa, known for its deserts, wildlife, and one of the lowest population densities in the world.'},
+      {'year': 2017, 'name': 'Nigeria', 'id': 2, 'lat': 9.0820, 'lon': 8.6753, 'textContent': 'Nigeria is a country in West Africa, the most populous in Africa, known for its oil industry and vibrant culture.'},
+      {'year': 2017, 'name': 'Europe', 'id': 3, 'lat': 54.5260, 'lon': 15.2551, 'textContent': 'Europe is a continent located entirely in the Northern Hemisphere, known for its rich history, culture, and diversity.'},
+      {'year': 2017, 'name': 'Niger', 'id': 4, 'lat': 17.6078, 'lon': 8.0817, 'textContent': 'Niger is a landlocked country in West Africa, known for its vast desert landscapes and role in regional stability.'},
+      {'year': 2015, 'name': 'Japan', 'id': 1, 'lat': 36.2048, 'lon': 138.2529, 'textContent': 'Japan is an island nation in East Asia, known for its advanced technology, rich culture, and natural beauty.'},
+      {'year': 2014, 'name': 'Nepal', 'id': 1, 'lat': 28.3949, 'lon': 84.1240, 'textContent': 'Nepal is a landlocked country in South Asia, famous for the Himalayan mountains, including Mount Everest.'},
+      {'year': 2014, 'name': 'Uganda', 'id': 2, 'lat': 1.3733, 'lon': 32.2903, 'textContent': 'Uganda is a landlocked country in East Africa, known for its wildlife, including mountain gorillas and its rich cultural heritage.'},
+      {'year': 2014, 'name': 'Sudan', 'id': 3, 'lat': 12.8628, 'lon': 30.8025, 'textContent': 'Sudan is a country in northeastern Africa, known for its ancient civilizations and the Sahara Desert.'},
+      {'year': 2013, 'name': 'U.K.', 'id': 1, 'lat': 55.3781, 'lon': -3.4360, 'textContent': 'The U.K. is a country in Europe, consisting of England, Scotland, Wales, and Northern Ireland, with a rich history of global influence.'},
+      {'year': 2013, 'name': 'South Sudan', 'id': 2, 'lat': 4.8594, 'lon': 29.6691, 'textContent': 'South Sudan is a landlocked country in East-Central Africa, which gained independence from Sudan in 2011.'},
+      {'year': 2013, 'name': 'Sudan', 'id': 3, 'lat': 12.8628, 'lon': 30.8025, 'textContent': 'Sudan is a country in northeastern Africa, known for its ancient civilizations and the Sahara Desert.'},
+      {'year': 2012, 'name': 'Chinese mainland', 'id': 1, 'lat': 35.8617, 'lon': 104.1954, 'textContent': 'The Chinese mainland refers to the continental portion of China, home to the country’s largest population and cities.'},
+      {'year': 2012, 'name': 'South Sudan', 'id': 2, 'lat': 4.8594, 'lon': 29.6691, 'textContent': 'South Sudan is a landlocked country in East-Central Africa, which gained independence from Sudan in 2011.'},
+      {'year': 2012, 'name': 'U.K.', 'id': 3, 'lat': 55.3781, 'lon': -3.4360, 'textContent': 'The U.K. is a country in Europe, consisting of England, Scotland, Wales, and Northern Ireland, with a rich history of global influence.'},
+      {'year': 2012, 'name': 'Worldwide', 'id': 4, 'lat': 0.0000, 'lon': 0.0000, 'textContent': 'Worldwide refers to the entire world, covering all countries and regions across the globe.'},
+      {'year': 2012, 'name': 'India', 'id': 5, 'lat': 20.5937, 'lon': 78.9629, 'textContent': 'India is a South Asian country known for its vast population, rich history, and diverse culture.'},
+      {'year': 2012, 'name': 'Hongkong', 'id': 6, 'lat': 22.3193, 'lon': 114.1694, 'textContent': 'Hong Kong is a Special Administrative Region of China, known for its modern skyline, financial hub, and unique cultural blend.'},
+      {'year': 2011, 'name': 'India', 'id': 1, 'lat': 20.5937, 'lon': 78.9629, 'textContent': 'India is a South Asian country known for its vast population, rich history, and diverse culture.'},
+      {'year': 2011, 'name': 'Chinese mainland', 'id': 2, 'lat': 35.8617, 'lon': 104.1954, 'textContent': 'The Chinese mainland refers to the continental portion of China, home to the country’s largest population and cities.'},
+      {'year': 2011, 'name': 'Uganda', 'id': 3, 'lat': 1.3733, 'lon': 32.2903, 'textContent': 'Uganda is a landlocked country in East Africa, known for its wildlife, including mountain gorillas and its rich cultural heritage.'},
+      {'year': 2011, 'name': 'Hongkong', 'id': 4, 'lat': 22.3193, 'lon': 114.1694, 'textContent': 'Hong Kong is a Special Administrative Region of China, known for its modern skyline, financial hub, and unique cultural blend.'},
+      {'year': 2010, 'name': 'Chinese mainland', 'id': 1, 'lat': 35.8617, 'lon': 104.1954, 'textContent': 'The Chinese mainland refers to the continental portion of China, home to the country’s largest population and cities.'},
+      {'year': 2010, 'name': 'Uganda', 'id': 2, 'lat': 1.3733, 'lon': 32.2903, 'textContent': 'Uganda is a landlocked country in East Africa, known for its wildlife, including mountain gorillas and its rich cultural heritage.'},
+      {'year': 2010, 'name': 'USA', 'id': 3, 'lat': 37.0902, 'lon': -95.7129, 'textContent': 'The USA is a large country in North America, known for its political, economic, and cultural global influence.'},
+      {'year': 2009, 'name': 'Chinese mainland', 'id': 1, 'lat': 35.8617, 'lon': 104.1954, 'textContent': 'The Chinese mainland refers to the continental portion of China, home to the country’s largest population and cities.'},
+      {'year': 2009, 'name': 'Hongkong', 'id': 2, 'lat': 22.3193, 'lon': 114.1694, 'textContent': 'Hong Kong is a Special Administrative Region of China, known for its modern skyline, financial hub, and unique cultural blend.'},
+      {'year': 2009, 'name': 'Uganda', 'id': 3, 'lat': 1.3733, 'lon': 32.2903, 'textContent': 'Uganda is a landlocked country in East Africa, known for its wildlife, including mountain gorillas and its rich cultural heritage.'}
+    ];
+  
+    // Set the dimensions of the SVG
+    const width = window.innerWidth / 2;
+    const height = window.innerHeight;
+  
+    // Create an SVG element and append it to the body
+    const svg = d3.select('svg')
+      .attr('width', width)
+      .attr('height', height);
+  
+    // Define a projection that transforms the 3D coordinates (longitude/latitude) into 2D screen coordinates
+    const projection = d3.geoMercator()
+      .scale(120)
+      .translate([width / 2, height / 2]); // Center the map
+  
+    // Define a path generator using the projection
+    const path = d3.geoPath().projection(projection);
+  
+    // Select the tooltip div
+    const tooltip = d3.select("#tooltip");
+  
+    // Select the div where the animation will appear
+    const typewriterDiv = d3.select("#typewriter");
+    const textContent = 'Hepatitis E is a viral infection that primarily affects the liver.';
+  
+    // Function to animate the typewriter effect
+    function typeWriterEffect(text, element, delay) {
+      let i = 0;
+      
+      // Clear the content before starting new animation
+      element.text('');
+
+      let interval = setInterval(function () {
+        element.text(element.text() + text[i]);
+        i++;
+        if (i === text.length) {
+          clearInterval(interval); // Stop the interval when the text is fully typed
+        }
+      }, delay);
+    }
+    
+    // Load the world GeoJSON data
+    d3.json('https://raw.githubusercontent.com/holtzy/D3-graph-gallery/master/DATA/world.geojson')
+      .then(function (worldData) {
+        function showTooltip(event, content) {
+          tooltip.style("display", "block")
+            .html(content)  // Set the content of the tooltip
+            .style("left", (event.pageX + 10) + "px")  // Position the tooltip slightly right of the cursor
+            .style("top", (event.pageY + 10) + "px");  // Position the tooltip slightly below the cursor
+        }
+
+        function hideTooltip() {
+          tooltip.style("display", "none");
+        }
+
+        // Draw the countries on the map
+        svg.selectAll('path')
+          .data(worldData.features)  // Each country is a feature in the GeoJSON data
+          .enter()
+          .append('path')
+          .attr('d', path)
+          .attr('fill', '#69b3a2')
+          .attr('stroke', '#ffffff')
+          .attr('stroke-width', 0.5)
+          .attr('class', 'country')
+          .on("mouseover", function(event, d) {
+            // Show tooltip when hovering over the circle
+            d3.select(this).attr('fill', '#ff6347');
+          })
+          .on('mouseout', function(event, d) {
+             // Reset country color when hover ends
+             d3.select(this).attr('fill', '#69b3a2');
+          });
+  
+        // Function to update locations on the map based on the year
+        function updateLocation(year) {
+          // Filter locations by year
+          const yearLocations = locations.filter(loc => loc.year === year);
+  
+          // Loop through locations for the current year
+          yearLocations.forEach(function (loc) {
+            // Convert latitude/longitude to pixel coordinates
+            const [x, y] = projection([loc.lon, loc.lat]);
+  
+            // Add outer circle (light-orange)
+            const outerCircle = svg.append('circle')
+              .attr('cx', x)
+              .attr('cy', y)
+              .attr('r', 0)  // Initial radius (starting point)
+              .attr('class', 'circle-outer');
+  
+            // Add a label for the location
+            const circleText = svg.append('text')
+              .attr('x', x + 10)  // Offset the label to the right
+              .attr('y', y)
+              .attr('id', function(){
+                return(loc.id);
+              })
+              .attr('opacity', 0)
+              .attr('class', 'label')
+              .text(loc.name);
+  
+            // Add inner circle (red)
+            const innerCircle = svg.append('circle')
+              .attr('cx', x)
+              .attr('cy', y)
+              .attr('r', 0)  // Initial radius (starting point)
+              .attr('class', 'circle-inner')
+              .on('mouseover', function(event,d) {
+                  d3.select(this).attr('r', 15);
+                  d3.select(this).style('fill', 'orange');
+
+                  svg.selectAll('text').style('fill', function(nodeData){
+                    if(loc.id==this.id){
+                      return('yellow');
+                    }
+                  }).style('font-size', function(nodeData){
+                    if(loc.id==this.id){
+                      return('24px');
+                    }
+                  });
+                  
+                  if(loc.id==1){
+                    d3.select('#typewriter').style('color', 'yellow');
+                  }else if(loc.id==2){
+                    d3.select('#typewriter2').style('color', 'yellow');
+                  }else if(loc.id==3){
+                    d3.select('#typewriter3').style('color', 'yellow');
+                  }else if(loc.id==4){
+                    d3.select('#typewriter4').style('color', 'yellow');
+                  }
+              })
+              .on('mouseout', function(event,d) {
+                  d3.select(this).attr('r', 7);
+                  d3.select(this).style('fill', 'red').style('font-size', '20px');
+                  svg.selectAll('text').style('fill', 'red');
+                  if(loc.id==1){
+                    d3.select('#typewriter').style('color', '#e4f1d6');
+                  }else if(loc.id==2){
+                    d3.select('#typewriter2').style('color', '#e4f1d6');
+                  }else if(loc.id==3){
+                    d3.select('#typewriter3').style('color', '#e4f1d6');
+                  }else if(loc.id==4){
+                    d3.select('#typewriter4').style('color', '#e4f1d6');
+                  }
+              });
+  
+            // Animation function for the circles
+            function animateCircles() {
+              outerCircle.transition()
+                .duration(2500)
+                .attr('r', 15)
+                .ease(d3.easeElasticInOut)
+                .on('end', function() {
+                  const element = d3.select(this);
+                  if (loc.year < 2024) {
+                    element.transition()
+                      .duration(2500)
+                      .attr('r', 0)
+                      .ease(d3.easeElasticInOut);
+                  }
+                });
+  
+              innerCircle.transition()
+                .duration(2500)
+                .attr('r', 7)
+                .ease(d3.easeElasticInOut)
+                .on('end', function() {
+                  const element = d3.select(this);
+                  if (loc.year < 2024) {
+                    element.transition()
+                      .duration(2500)
+                      .attr('r', 0)
+                      .ease(d3.easeElasticInOut);
+                  }
+                });
+  
+              // The circleText transition animation
+              circleText.transition()
+                .duration(1000)    // Fade in duration
+                .attr('opacity', 1)
+                .on('end', function() {
+                  // Trigger the typewriter effect after the fade-in is complete
+                  const element = d3.select(this); // This will refer to the circleText element
+                  const delay = 10; // Delay between typing each character (in ms)
+                  const textID = this.id;
+                  
+                  if(textID==1){
+                    typeWriterEffect(loc.id + '. ' + loc.textContent, d3.select('#typewriter'), delay);
+                    d3.select('#logo').text('台灣CDC E型肝炎國際疫情報告 ' + loc.year);
+                  }
+                  
+                  if(textID==2){
+                    typeWriterEffect(loc.id + '. ' + loc.textContent, d3.select('#typewriter2'), delay);
+                  }
+                  
+                  if(textID==3){
+                    typeWriterEffect(loc.id + '. ' + loc.textContent, d3.select('#typewriter3'), delay);
+                  }
+                  
+                  if(textID==4){
+                    typeWriterEffect(loc.id + '. ' + loc.textContent, d3.select('#typewriter4'), delay);
+                  }
+
+                  // After typing effect is complete, trigger the fade-out transition after 5 seconds
+                  setTimeout(function() {
+                    if (loc.year < 2024) {
+                      element.transition()
+                        .duration(500)
+                        .attr('opacity', 0);
+                      
+                      typeWriterEffect(' ', d3.select('#typewriter'), delay);
+                      typeWriterEffect(' ', d3.select('#typewriter2'), delay);
+                      typeWriterEffect(' ', d3.select('#typewriter3'), delay);
+                      typeWriterEffect(' ', d3.select('#typewriter4'), delay);
+                    }
+                  }, loc.textContent.length * delay + 2000); // Adding a little extra delay after typing completes
+                });
+            }
+  
+            // Wait for the page to fully load
+            animateCircles();
+          });
+        }
+  
+        // Function to animate through the years
+        function animateYear(year) {
+          updateLocation(year);
+
+          // Loop back after 2023 to 2021
+          setTimeout(() => {
+            if (year < 2024) {
+              animateYear(year + 1); // Continue to next year
+            } else {
+              animateYear(2009); // Restart from 2021 after 2023
+              //console.log("Animation stopped at 2024");
+            }
+          }, 5000);
+        }
+  
+        // Start the animation from year 2021
+        animateYear(2019);
+      })
+      .catch(function (error) {
+        console.error('Error loading the GeoJSON data: ', error);
+      });
+  
+  </script>
+
+</body>
+</html>
